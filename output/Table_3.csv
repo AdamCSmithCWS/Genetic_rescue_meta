@@ -1,0 +1,4 @@
+elpd_diff,se_diff,model2,HR_effect,TR_effect
+0,0,log(HR),0.96 [-0.32 : 2.2] 93% positive,NA
+-1.727030422,2.483112268,log(HR) + TR,0.96 [-0.34 : 2.2] 93% positive,0.036 [-0.025 : 0.097] 88% positive
+-3.124068251,2.524533329,log(HR) + TR + Fit_measure,0.87 [-0.51 : 2.1] 90% positive,0.037 [-0.031 : 0.1] 87% positive
