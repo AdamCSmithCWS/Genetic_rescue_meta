@@ -1,4 +1,4 @@
-## JClarke alt data
+## Clarke et al. analyses
 library(brms)
 library(lme4)
 library(tidyverse)
@@ -30,11 +30,15 @@ rt_se_rat <- log((x2/x1) + se_rat)-log(x2/x1) # approximate se of log ratio as d
 }
 
 
-# Julia's code ------------------------------------------------------------
 
 p_positive <- function(x){
   length(which(x > 0))/length(x)
 }
+
+
+# read in main data -------------------------------------------------------
+
+
 df_alt <- read_xlsx("He_dGR.xlsx", sheet = 1) %>%
   select(Study:fit_par) %>% 
   mutate(HR = Post_He/Pre_He,
@@ -49,6 +53,7 @@ df_alt <- read_xlsx("He_dGR.xlsx", sheet = 1) %>%
 
 mean(df_alt$HR)
 
+# exploratory plotting of the raw data
 tst <- ggplot(data = df_alt,
               aes(x = dHe,y = dGR))+
 geom_point()+
@@ -62,8 +67,6 @@ tst
 
 hist(df_alt$PreHe_SE,
      breaks = 30)
-
-
 tst <- ggplot(data = df_alt,
               aes(x = Pre_He,y = PreHe_SE))+
   geom_point()+
@@ -74,7 +77,7 @@ tst
 
 
 # custom Stan model -------------------------------------------------------
-
+# estimating the effect of rescue on heterozygosity
 n_studies <- as.integer(max(df_alt$Study_n))
 
 stan_data <- list(
@@ -113,7 +116,7 @@ summ <- posterior::as_draws_df(fit) %>%
   rename_with(.,.cols = contains("%"),
               ~ paste0("CI_",gsub(".","_",gsub("%","",.x), fixed = TRUE))) 
 
-# summ <- fit$summary()
+ summ <- fit$summary()
 
 beta_fit <- summ %>% 
   filter(grepl("beta[",variable, fixed = TRUE)) 
@@ -131,6 +134,11 @@ beta_out <- df_alt %>%
   bind_rows(.,BETA_fit)
 
 write_csv(beta_out,file = "output/differences_heterozygosity.csv")
+
+
+
+# Generating Figure 1 -----------------------------------------------------
+
 
 beta_out <- beta_out %>% 
   mutate(Study_sort = factor(Study,
@@ -190,6 +198,9 @@ dev.off()
 
 
 
+# Fitting models for GR by HE using brms ----------------------------------
+
+#setting standard normal priors
 me_prior <- c(prior(normal(0,1),
                       class = "meanme"),
               prior(normal(0,1),
@@ -198,8 +209,8 @@ me_prior <- c(prior(normal(0,1),
                     class = "b"))
 
 
-#|se(smd_GR_er, sigma = TRUE)
-mod4 <- brm(dGR ~ me(dHe,dHE_er) + (1|Study),     #|se(smd_GR_er, sigma = TRUE)
+
+mod4 <- brm(dGR ~ me(dHe,dHE_er) + (1|Study),     
             family = "gaussian", 
             data = df_alt,
             prior = me_prior,
@@ -212,9 +223,10 @@ mod4 <- brm(dGR ~ me(dHe,dHE_er) + (1|Study),     #|se(smd_GR_er, sigma = TRUE)
 
 
 summary(mod4)
+#posterior predictive check
 pp_check(mod4,ndraws = 100)
 
-#|se(smd_GR_er, sigma = TRUE)
+
 mod5 <- brm(dGR ~ me(dHe,dHE_er) + tran_R + (1|Study), 
             family = "gaussian", 
             data = df_alt,
@@ -226,7 +238,7 @@ mod5 <- brm(dGR ~ me(dHe,dHE_er) + tran_R + (1|Study),
 
 summary(mod5)
 
-#|se(smd_GR_er, sigma = TRUE)
+
 mod6 <- brm(dGR ~ me(dHe,dHE_er) + tran_R + fit_par + (1|Study), 
             family = "gaussian", 
             data = df_alt,
@@ -238,6 +250,9 @@ mod6 <- brm(dGR ~ me(dHe,dHE_er) + tran_R + fit_par + (1|Study),
 
 summary(mod6)
 
+
+
+# Extracting posterior summaries of the parameters ------------------------
 
 draws_4 <- posterior::as_draws_df(mod4) %>% 
   posterior::summarise_draws("mean",
@@ -278,6 +293,10 @@ draws_summary <- bind_rows(draws_4,
                            draws_6)
 write_csv(draws_summary,
           "output/draws_summary.csv")
+# above csv also includes convergence statistics
+
+
+# Generating predictions --------------------------------------------------
 
 pred_data <- data.frame(dHe = seq(min(df_alt$dHe),max(df_alt$dHe),
                                   length.out = 100),
@@ -291,6 +310,8 @@ preds_4 <- bind_cols(pred_data,
                       preds_4)
 preds_4_line <- preds_4[c(1,nrow(preds_4)),]
 
+
+# Plotting the parameter estimates with raw data --------------------------
 
 comp_plot <- ggplot()+
   geom_hline(yintercept = 0)+
@@ -328,6 +349,11 @@ pdf("Figure_2.pdf",
 print(comp_plot)
 dev.off()
 
+
+
+# Cross validation --------------------------------------------------------
+
+
 refit_loo <- FALSE # change to true to re-run cross-validation
 if(refit_loo){ # within this conditional block because requires many hours to run
   
@@ -347,6 +373,8 @@ write_csv(loo_out,
           "output/loo_out.csv")
 }
 
+
+  # Creating table 3 for the publication
 modls <- data.frame(model = c("mod4","mod5","mod6"),
                     model2 = c("dHe_27","dHe_tranR_27","dHe_tranR_fitPar_27"))
 param_HR <- draws_summary %>% 
